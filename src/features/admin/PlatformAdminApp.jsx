@@ -118,7 +118,7 @@ function AdminSidebar({ activeView, mobileOpen, navigate, onClose }) {
       <nav className="rmm-nav">
         {sections.map(section=><div className="rmm-nav-section" key={section}><span>{section}</span>{navigation.filter(item=>item.section===section).map(({id,label,icon:Icon})=><button className={activeView===id?'active':''} key={id} onClick={()=>navigate(id)} type="button"><Icon size={17}/><span>{label}</span></button>)}</div>)}
       </nav>
-      <div className="rmm-sidebar-footer"><div><span>HC</span><div><strong>Hi5Central</strong><small>Platform administration</small></div></div></div>
+      <div className="rmm-sidebar-footer"><div className="rmm-product-switches">{config.appUrl ? <a href={config.appUrl}>ITSM</a> : null}{config.rmmUrl ? <a href={config.rmmUrl}>RMM</a> : null}</div><div><span>HC</span><div><strong>Hi5Central</strong><small>Platform administration</small></div></div></div>
     </aside>
   </>
 }
