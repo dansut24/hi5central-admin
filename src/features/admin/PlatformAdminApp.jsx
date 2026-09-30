@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Activity, AlertTriangle, ArrowUp, Ban, Building2, CreditCard, Database, Download,
-  LogOut, Menu, Moon, PackageCheck, PackageSearch, Pause, Play, Plus, RefreshCw,
+  Activity, AlertTriangle, ArrowUp, Ban, Building2, Check, Copy, CreditCard, Database, Download,
+  KeyRound, Link2Off, LogOut, Menu, Moon, PackageCheck, PackageSearch, Pause, Play, Plus, RefreshCw,
   RotateCcw, Save, Search, ServerCog, ShieldCheck, Sun, Trash2, UserRound, Wrench, X,
 } from 'lucide-react'
 import { deploymentConfig } from '../../lib/deploymentConfig.js'
@@ -14,7 +14,8 @@ const API = config.apiUrl || `https://api.${config.rootDomain}`
 const navigation = [
   { id:'overview', label:'Overview', section:'Platform', icon:Database },
   { id:'tenants', label:'Tenants', section:'Customers', icon:Building2 },
-  { id:'billing', label:'Billing', section:'Customers', icon:CreditCard },
+  { id:'billing', label:'Billing', section:'Commercial', icon:CreditCard },
+  { id:'licenses', label:'MSP licensing', section:'Commercial', icon:KeyRound },
   { id:'qualification', label:'Qualification', section:'Software', icon:PackageCheck },
   { id:'catalogue', label:'Software catalogue', section:'Software', icon:ShieldCheck },
   { id:'winget', label:'WinGet', section:'Software', icon:PackageSearch },
@@ -24,6 +25,7 @@ const pageMeta = {
   overview:['CONTROL PLANE','Platform overview','Hi5Central-wide operations, customers and software safety.'],
   tenants:['CUSTOMERS','Tenants','Manage tenant ownership, products, lifecycle and key workspace details.'],
   billing:['COMMERCIAL','Billing','Manage tenant plans, billing status, pricing, trials and renewals.'],
+  licenses:['LICENSING AUTHORITY','MSP licensing','Issue, control and audit signed Self-Hosted MSP entitlements.'],
   qualification:['SOFTWARE SAFETY','Qualification','Qualification runners, active work and review outcomes.'],
   catalogue:['GLOBAL SOFTWARE INTELLIGENCE','Software catalogue','The approved global software catalogue consumed by customer RMM tenants.'],
   winget:['WINDOWS PACKAGE INTELLIGENCE','WinGet manifest index','Browse the full Microsoft WinGet source index and control its sync state.'],
@@ -615,6 +617,157 @@ function Winget({ query, refreshKey }) {
   </>
 }
 
+
+function licenseLimit(value) {
+  return value == null ? 'Unlimited' : Number(value).toLocaleString()
+}
+function LicenseEditor({ item, onSaved }) {
+  const [draft,setDraft]=useState({
+    customerName:item.customerName||'',
+    status:item.status||'active',
+    tenantLimit:item.limits?.tenants??'',
+    userLimit:item.limits?.users??'',
+    deviceLimit:item.limits?.devices??'',
+    expiresAt:dateInput(item.expiresAt),
+    graceDays:String(item.graceDays??30),
+    notes:item.notes||'',
+    features:{
+      multiTenant:Boolean(item.features?.multiTenant),
+      whiteLabel:Boolean(item.features?.whiteLabel),
+      platformAdmin:Boolean(item.features?.platformAdmin),
+      customerPortals:Boolean(item.features?.customerPortals),
+      customDomains:Boolean(item.features?.customDomains),
+    },
+  })
+  const [busy,setBusy]=useState('')
+  const [message,setMessage]=useState('')
+  async function save(){
+    setBusy('save');setMessage('')
+    try{
+      await api(`/licenses/${item.id}`,{
+        method:'PATCH',
+        body:JSON.stringify({
+          customerName:draft.customerName,
+          status:draft.status,
+          tenantLimit:draft.tenantLimit===''?null:Number(draft.tenantLimit),
+          userLimit:draft.userLimit===''?null:Number(draft.userLimit),
+          deviceLimit:draft.deviceLimit===''?null:Number(draft.deviceLimit),
+          expiresAt:dateToIso(draft.expiresAt),
+          graceDays:Number(draft.graceDays||0),
+          notes:draft.notes,
+          features:draft.features,
+        }),
+      })
+      setMessage('Licence updated.')
+      onSaved()
+    }catch(err){setMessage(err.message)}finally{setBusy('')}
+  }
+  async function resetBinding(){
+    if(!window.confirm('Reset this licence binding? The current installation will need to activate again.'))return
+    setBusy('binding');setMessage('')
+    try{
+      await api(`/licenses/${item.id}/reset-binding`,{method:'POST',body:'{}'})
+      setMessage('Installation binding reset.')
+      onSaved()
+    }catch(err){setMessage(err.message)}finally{setBusy('')}
+  }
+  const featureLabels={
+    multiTenant:'Multi-tenancy',
+    whiteLabel:'White label',
+    platformAdmin:'MSP Admin',
+    customerPortals:'Customer portals',
+    customDomains:'Custom domains',
+  }
+  return <div className="h5a-license-editor">
+    <div className="h5a-license-facts">
+      <span><KeyRound size={15}/><div><small>Key reference</small><strong>•••• {item.keySuffix||'—'}</strong><em>Plaintext key is never stored</em></div></span>
+      <span><ServerCog size={15}/><div><small>Installation</small><strong>{item.boundInstallationId?'Bound':'Not activated'}</strong><em>{item.boundInstallationId||'Waiting for first activation'}</em></div></span>
+      <span><Activity size={15}/><div><small>Last refresh</small><strong>{fmtDate(item.lastRefreshedAt)}</strong><em>Activated {fmtDate(item.lastActivatedAt)}</em></div></span>
+      <span><ShieldCheck size={15}/><div><small>Entitlement</small><strong>{licenseLimit(item.limits?.tenants)} tenants</strong><em>{licenseLimit(item.limits?.devices)} devices · {licenseLimit(item.limits?.users)} users</em></div></span>
+    </div>
+    <div className="h5a-license-grid">
+      <label>Customer<input value={draft.customerName} onChange={e=>setDraft({...draft,customerName:e.target.value})}/></label>
+      <label>Status<select value={draft.status} onChange={e=>setDraft({...draft,status:e.target.value})}><option value="active">Active</option><option value="suspended">Suspended</option><option value="cancelled">Cancelled</option></select></label>
+      <label>Tenant limit<input type="number" min="1" placeholder="Unlimited" value={draft.tenantLimit} onChange={e=>setDraft({...draft,tenantLimit:e.target.value})}/></label>
+      <label>User limit<input type="number" min="1" placeholder="Unlimited" value={draft.userLimit} onChange={e=>setDraft({...draft,userLimit:e.target.value})}/></label>
+      <label>Device limit<input type="number" min="1" placeholder="Unlimited" value={draft.deviceLimit} onChange={e=>setDraft({...draft,deviceLimit:e.target.value})}/></label>
+      <label>Expiry<input type="date" value={draft.expiresAt} onChange={e=>setDraft({...draft,expiresAt:e.target.value})}/></label>
+      <label>Grace days<input type="number" min="0" max="90" value={draft.graceDays} onChange={e=>setDraft({...draft,graceDays:e.target.value})}/></label>
+    </div>
+    <div className="h5a-license-features">
+      {Object.entries(featureLabels).map(([key,label])=><label key={key}><input type="checkbox" checked={Boolean(draft.features[key])} onChange={e=>setDraft({...draft,features:{...draft.features,[key]:e.target.checked}})}/>{label}</label>)}
+    </div>
+    <label className="h5a-license-notes">Internal notes<textarea value={draft.notes} onChange={e=>setDraft({...draft,notes:e.target.value})} placeholder="Commercial or operational notes. Never paste the raw licence key here."/></label>
+    <div className="h5a-license-actions">
+      <button className="rmm-primary compact" onClick={save} disabled={Boolean(busy)}><Save size={13}/>{busy==='save'?'Saving…':'Save licence'}</button>
+      {item.boundInstallationId?<button className="rmm-secondary compact danger" onClick={resetBinding} disabled={Boolean(busy)}><Link2Off size={13}/>{busy==='binding'?'Resetting…':'Reset binding'}</button>:null}
+      {message?<span>{message}</span>:null}
+    </div>
+  </div>
+}
+
+function Licenses({ items, refresh, query }) {
+  const emptyDraft={customerName:'',tenantLimit:'',userLimit:'',deviceLimit:'',expiresAt:'',graceDays:'30',notes:''}
+  const [creating,setCreating]=useState(false)
+  const [draft,setDraft]=useState(emptyDraft)
+  const [busy,setBusy]=useState(false)
+  const [issued,setIssued]=useState(null)
+  const [copied,setCopied]=useState(false)
+  const [error,setError]=useState('')
+  const filtered=items.filter(item=>!query||[item.customerName,item.status,item.keySuffix,item.boundInstallationId].some(value=>String(value||'').toLowerCase().includes(query.toLowerCase())))
+  const active=items.filter(item=>item.status==='active').length
+  const bound=items.filter(item=>item.boundInstallationId).length
+  async function issue(event){
+    event.preventDefault();setBusy(true);setError('')
+    try{
+      const result=await api('/licenses',{
+        method:'POST',
+        body:JSON.stringify({
+          customerName:draft.customerName,
+          tenantLimit:draft.tenantLimit===''?null:Number(draft.tenantLimit),
+          userLimit:draft.userLimit===''?null:Number(draft.userLimit),
+          deviceLimit:draft.deviceLimit===''?null:Number(draft.deviceLimit),
+          expiresAt:dateToIso(draft.expiresAt),
+          graceDays:Number(draft.graceDays||30),
+          notes:draft.notes,
+        }),
+      })
+      setIssued({key:result.licenseKey,notice:result.notice,customer:result.license?.customerName})
+      setDraft(emptyDraft);setCreating(false);setCopied(false);refresh()
+    }catch(err){setError(err.message)}finally{setBusy(false)}
+  }
+  async function copyKey(){
+    if(!issued?.key)return
+    await navigator.clipboard?.writeText(issued.key)
+    setCopied(true)
+  }
+  return <>
+    <PageHeading view="licenses" action={<button className="rmm-primary compact" onClick={()=>setCreating(value=>!value)}><Plus size={14}/>{creating?'Cancel':'Issue MSP licence'}</button>}/>
+    <div className="h5a-license-summary">
+      <article className="rmm-card"><KeyRound size={18}/><div><span>Active licences</span><strong>{active}</strong><small>{items.length} total MSP licences</small></div></article>
+      <article className="rmm-card"><ServerCog size={18}/><div><span>Bound installations</span><strong>{bound}</strong><small>{items.length-bound} awaiting activation or reset</small></div></article>
+      <article className="rmm-card"><ShieldCheck size={18}/><div><span>Authority model</span><strong>Ed25519</strong><small>Signed entitlements verified locally by self-hosted MSP</small></div></article>
+    </div>
+    {issued?<div className="h5a-issued-key"><div><span className="rmm-eyebrow">ONE-TIME LICENCE KEY</span><h2>{issued.customer||'MSP licence'} issued</h2><p>{issued.notice||'Store and send this key securely. It cannot be shown again from Hi5Central.'}</p><code>{issued.key}</code></div><button className="rmm-primary compact" onClick={copyKey}>{copied?<Check size={14}/>:<Copy size={14}/>} {copied?'Copied':'Copy key'}</button></div>:null}
+    {creating?<form className="rmm-card h5a-license-create" onSubmit={issue}>
+      <div className="rmm-card-heading"><div><span className="rmm-eyebrow">NEW SELF-HOSTED MSP</span><h2>Issue signed entitlement</h2><p>The raw key is returned once. The database stores only its hash and display suffix.</p></div></div>
+      <div className="h5a-license-grid">
+        <label>Customer<input required value={draft.customerName} onChange={e=>setDraft({...draft,customerName:e.target.value})} placeholder="MSP customer name"/></label>
+        <label>Tenant limit<input type="number" min="1" value={draft.tenantLimit} onChange={e=>setDraft({...draft,tenantLimit:e.target.value})} placeholder="Unlimited"/></label>
+        <label>User limit<input type="number" min="1" value={draft.userLimit} onChange={e=>setDraft({...draft,userLimit:e.target.value})} placeholder="Unlimited"/></label>
+        <label>Device limit<input type="number" min="1" value={draft.deviceLimit} onChange={e=>setDraft({...draft,deviceLimit:e.target.value})} placeholder="Unlimited"/></label>
+        <label>Expiry<input type="date" value={draft.expiresAt} onChange={e=>setDraft({...draft,expiresAt:e.target.value})}/></label>
+        <label>Grace days<input type="number" min="0" max="90" value={draft.graceDays} onChange={e=>setDraft({...draft,graceDays:e.target.value})}/></label>
+      </div>
+      <label className="h5a-license-notes">Internal notes<textarea value={draft.notes} onChange={e=>setDraft({...draft,notes:e.target.value})}/></label>
+      {error?<div className="h5a-page-error">{error}</div>:null}
+      <button className="rmm-primary compact" disabled={busy}><KeyRound size={13}/>{busy?'Issuing…':'Issue licence'}</button>
+    </form>:null}
+    <div className="h5a-stack h5a-license-stack">{filtered.map(item=><article className="rmm-card" key={item.id}><div className="rmm-card-heading h5a-license-head"><div><span className="rmm-eyebrow">MSP · •••• {item.keySuffix||'—'}</span><h2>{item.customerName}</h2><p>Expires {fmtDate(item.expiresAt)} · {item.graceDays} day grace · created {fmtDate(item.createdAt)}</p></div><StatusPill value={item.status}/></div><LicenseEditor item={item} onSaved={refresh}/></article>)}</div>
+    {!filtered.length?<div className="rmm-card h5a-empty">{query?'No MSP licences match this search.':'No MSP licences have been issued yet.'}</div>:null}
+  </>
+}
+
 function Audit({ items, query }) {
   const rows=items.map(x=>({...x,created_at:fmtDate(x.created_at)})).filter(x=>!query||String(x.actor_name||'').toLowerCase().includes(query.toLowerCase())||String(x.action||'').toLowerCase().includes(query.toLowerCase()))
   return <><PageHeading view="audit"/><div className="rmm-card h5a-table-card"><div className="rmm-card-heading"><div><span className="rmm-eyebrow">PLATFORM EVENTS</span><h2>Administrative audit trail</h2></div></div><DataTable rows={rows} columns={['created_at','actor_name','action','target_type','target_id']}/></div></>
@@ -627,7 +780,7 @@ export function PlatformAdminApp() {
   const [query,setQuery]=useState('')
   const [mobileOpen,setMobileOpen]=useState(false)
   const [theme,setThemeState]=useState(()=>localStorage.getItem('hi5central-admin-theme')||'light')
-  const [data,setData]=useState({overview:null,tenants:[],billing:[],qualification:{runners:[],active:[],pending:[],recent:[]},catalogue:[],audit:[]})
+  const [data,setData]=useState({overview:null,tenants:[],billing:[],licenses:[],qualification:{runners:[],active:[],pending:[],recent:[]},catalogue:[],audit:[]})
   const [wingetRefreshKey,setWingetRefreshKey]=useState(0)
   const [error,setError]=useState('')
   function setTheme(value){setThemeState(value);localStorage.setItem('hi5central-admin-theme',value)}
@@ -636,10 +789,10 @@ export function PlatformAdminApp() {
     if(!user||target==='winget')return
     setError('')
     try{
-      const path={overview:'/overview',tenants:'/tenants',billing:'/tenants',qualification:'/qualification',catalogue:'/software/catalogue',audit:'/audit'}[target]
+      const path={overview:'/overview',tenants:'/tenants',billing:'/tenants',licenses:'/licenses',qualification:'/qualification',catalogue:'/software/catalogue',audit:'/audit'}[target]
       if(!path)return
       const result=await api(path)
-      const value=['tenants','billing','catalogue','audit'].includes(target)?result.items:result
+      const value=['tenants','billing','licenses','catalogue','audit'].includes(target)?result.items:result
       setData(prev=>({...prev,[target]:value}))
     }catch(err){if(err.status===401)setUser(null);else setError(err.message)}
   }
@@ -654,6 +807,7 @@ export function PlatformAdminApp() {
     if(view==='overview')return <Overview data={data.overview} refresh={()=>load('overview')}/>
     if(view==='tenants')return <Tenants items={data.tenants} refresh={()=>load('tenants')} query={query}/>
     if(view==='billing')return <Billing items={data.billing} refresh={()=>load('billing')} query={query}/>
+    if(view==='licenses')return <Licenses items={data.licenses} refresh={()=>load('licenses')} query={query}/>
     if(view==='qualification')return <Qualification data={data.qualification} query={query} refresh={()=>load('qualification')}/>
     if(view==='catalogue')return <Catalogue items={data.catalogue} query={query} refresh={()=>load('catalogue')}/>
     if(view==='winget')return <Winget key={query} query={query} refreshKey={wingetRefreshKey}/>
