@@ -1355,3 +1355,22 @@ body[data-hi5-surface='admin'] #root {
   }
   .h5a-release-change { padding: 12px; }
 }
+
+.h5a-release-tenant-scope { margin-bottom:14px; }
+.h5a-release-tenant-picker { min-width:230px; display:grid; gap:5px; color:var(--rmm-muted); font-size:8px; font-weight:850; text-transform:uppercase; letter-spacing:.04em; }
+.h5a-release-tenant-picker select { min-height:34px; border:1px solid var(--rmm-border); border-radius:8px; padding:6px 9px; background:var(--rmm-surface); color:var(--rmm-text); font:inherit; font-size:9px; text-transform:none; letter-spacing:0; }
+.h5a-release-tenant-policy { margin:0 16px 12px; padding:10px 12px; border:1px solid var(--rmm-border); border-radius:9px; background:var(--rmm-soft); display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.h5a-release-tenant-policy > div:first-child { display:grid; gap:2px; min-width:0; }
+.h5a-release-tenant-policy strong { color:var(--rmm-text); font-size:10px; }
+.h5a-release-tenant-policy small { color:var(--rmm-muted); font-size:8px; }
+.h5a-release-mode-buttons { display:flex; flex-wrap:wrap; gap:6px; }
+.h5a-release-mode-buttons button { min-height:30px; border:1px solid var(--rmm-border); border-radius:7px; padding:0 9px; background:var(--rmm-surface); color:var(--rmm-text); font-size:8px; font-weight:800; cursor:pointer; }
+.h5a-release-mode-buttons button.active { border-color:var(--rmm-accent); background:var(--rmm-accent-soft); color:var(--rmm-accent); }
+.h5a-release-tenant-list { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; padding:0 16px 16px; }
+.h5a-release-tenant-list > button { min-width:0; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:9px 10px; border:1px solid var(--rmm-border); border-radius:8px; background:var(--rmm-surface); color:var(--rmm-text); cursor:pointer; text-align:left; }
+.h5a-release-tenant-list > button.active { border-color:var(--rmm-accent); box-shadow:0 0 0 2px var(--rmm-accent-soft); }
+.h5a-release-tenant-list > button > span:first-child { min-width:0; display:grid; gap:2px; }
+.h5a-release-tenant-list strong { font-size:9px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.h5a-release-tenant-list small { color:var(--rmm-muted); font-size:7px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+@media (max-width:1000px) { .h5a-release-tenant-list { grid-template-columns:1fr 1fr; } }
+@media (max-width:760px) { .h5a-release-tenant-picker { width:100%; min-width:0; } .h5a-release-tenant-policy { flex-direction:column; align-items:stretch; } .h5a-release-mode-buttons button { flex:1 1 auto; } .h5a-release-tenant-list { grid-template-columns:1fr; } }

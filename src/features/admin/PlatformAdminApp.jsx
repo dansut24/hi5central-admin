@@ -622,7 +622,9 @@ function Winget({ query, refreshKey }) {
 
 
 function Releases({ data, refresh, query }) {
-  const releaseData=data||{environments:[],features:[],changes:[],promotions:[],actions:[]}
+  const releaseData=data||{environments:[],features:[],changes:[],promotions:[],actions:[],tenants:[]}
+  const [scopedData,setScopedData]=useState(null)
+  const [selectedTenantId,setSelectedTenantId]=useState('')
   const [creating,setCreating]=useState(false)
   const [featureCreating,setFeatureCreating]=useState(false)
   const [uatSelected,setUatSelected]=useState([])
@@ -630,12 +632,48 @@ function Releases({ data, refresh, query }) {
   const [message,setMessage]=useState('')
   const [draft,setDraft]=useState({title:'',description:'',component:'platform',risk:'medium',sourceRef:'',version:'',featureKey:''})
   const [featureDraft,setFeatureDraft]=useState({featureKey:'',title:'',component:'platform',description:''})
-  const changes=(releaseData.changes||[]).filter(item=>!query||[item.changeKey,item.title,item.component,item.state,item.sourceRef].some(v=>String(v||'').toLowerCase().includes(query.toLowerCase())))
-  const liveSelected=(releaseData.changes||[]).filter(item=>item.state==='selected_for_live')
+  const viewData=scopedData||releaseData
+  const changes=(viewData.changes||[]).filter(item=>!query||[item.changeKey,item.title,item.component,item.state,item.sourceRef].some(v=>String(v||'').toLowerCase().includes(query.toLowerCase())))
+  const liveSelected=(viewData.changes||[]).filter(item=>item.state==='selected_for_live')
+  const selectedTenant=(releaseData.tenants||[]).find(item=>item.tenantId===selectedTenantId)||null
   async function run(key,fn){
     setBusy(key);setMessage('')
     try{await fn();await refresh()}catch(err){setMessage(err.message)}finally{setBusy('')}
   }
+
+  useEffect(()=>{
+    if(!selectedTenantId)setScopedData(null)
+  },[releaseData,selectedTenantId])
+
+  async function changeTenantScope(tenantId){
+    setSelectedTenantId(tenantId)
+    setMessage('')
+    if(!tenantId){setScopedData(null);return}
+    setBusy('tenant-scope')
+    try{
+      const scoped=await api('/releases/overview?tenantId='+encodeURIComponent(tenantId))
+      setScopedData(scoped)
+    }catch(err){setMessage(err.message)}finally{setBusy('')}
+  }
+
+  async function setTenantUpdateMode(tenant,updateMode){
+    await run('tenant-policy-'+tenant.tenantId,async()=>{
+      await api(`/releases/tenants/${tenant.tenantId}/preferences`,{
+        method:'PATCH',
+        body:JSON.stringify({
+          updateMode,
+          liveDelayHours:Number(tenant.liveDelayHours??24),
+          allowEmergencySecurityUpdates:tenant.allowEmergencySecurityUpdates!==false,
+          maintenanceWindow:tenant.maintenanceWindow||{},
+        }),
+      })
+      if(selectedTenantId===tenant.tenantId){
+        const scoped=await api('/releases/overview?tenantId='+encodeURIComponent(tenant.tenantId))
+        setScopedData(scoped)
+      }
+    })
+  }
+
   async function createChange(event){
     event.preventDefault()
     await run('create',async()=>{
@@ -685,14 +723,44 @@ function Releases({ data, refresh, query }) {
     await run('reset-test',()=>api('/releases/environments/test/reset',{method:'POST',body:'{}'}))
   }
   async function toggleFeature(feature,environment){
-    await run(`feature-${feature.key}-${environment}`,()=>api(`/releases/features/${encodeURIComponent(feature.key)}/${environment}`,{
-      method:'PATCH',body:JSON.stringify({enabled:!feature.flags?.[environment]}),
-    }))
+    await run(`feature-${feature.key}-${environment}`,async()=>{
+      await api(`/releases/features/${encodeURIComponent(feature.key)}/${environment}`,{
+        method:'PATCH',body:JSON.stringify({enabled:!feature.flags?.[environment],tenantId:selectedTenantId||undefined}),
+      })
+      if(selectedTenantId){
+        const scoped=await api('/releases/overview?tenantId='+encodeURIComponent(selectedTenantId))
+        setScopedData(scoped)
+      }
+    })
   }
   const environmentOrder=['dev','test','uat','live']
-  const envMap=Object.fromEntries((releaseData.environments||[]).map(item=>[item.environment,item]))
+  const envMap=Object.fromEntries((viewData.environments||[]).map(item=>[item.environment,item]))
   return <>
     <PageHeading view="releases" action={<div className="h5a-release-heading-actions"><button className="rmm-secondary compact" onClick={()=>setFeatureCreating(v=>!v)}><ShieldCheck size={14}/>Feature flag</button><button className="rmm-primary compact" onClick={()=>setCreating(v=>!v)}><Plus size={14}/>New change</button></div>}/>
+    <div className="rmm-card h5a-release-tenant-scope">
+      <div className="rmm-card-heading">
+        <div><span className="rmm-eyebrow">TENANT UPDATE OWNERSHIP</span><h2>Release policy scope</h2><p>Choose deployment defaults or inspect a specific tenant's UAT/Production feature state and update-management preference.</p></div>
+        <label className="h5a-release-tenant-picker">Scope
+          <select value={selectedTenantId} disabled={busy==='tenant-scope'} onChange={e=>changeTenantScope(e.target.value)}>
+            <option value="">Deployment defaults</option>
+            {(releaseData.tenants||[]).map(tenant=><option key={tenant.tenantId} value={tenant.tenantId}>{tenant.companyName} · {tenant.slug}</option>)}
+          </select>
+        </label>
+      </div>
+      {selectedTenant?<div className="h5a-release-tenant-policy">
+        <div><strong>{selectedTenant.companyName}</strong><small>{selectedTenant.slug} · Production delay {selectedTenant.liveDelayHours??24}h</small></div>
+        <div className="h5a-release-mode-buttons">
+          <button className={selectedTenant.updateMode==='admin_controlled'?'active':''} disabled={Boolean(busy)} onClick={()=>setTenantUpdateMode(selectedTenant,'admin_controlled')}>Admin controlled</button>
+          <button className={selectedTenant.updateMode==='hi5_managed'?'active':''} disabled={Boolean(busy)} onClick={()=>setTenantUpdateMode(selectedTenant,'hi5_managed')}>Hi5Central managed</button>
+        </div>
+      </div>:<div className="h5a-release-tenant-policy"><div><strong>Deployment defaults</strong><small>These switches are inherited when a tenant has no UAT/Production override.</small></div></div>}
+      {(releaseData.tenants||[]).length?<div className="h5a-release-tenant-list">
+        {(releaseData.tenants||[]).map(tenant=><button key={tenant.tenantId} className={selectedTenantId===tenant.tenantId?'active':''} onClick={()=>changeTenantScope(tenant.tenantId)}>
+          <span><strong>{tenant.companyName}</strong><small>{tenant.slug}</small></span>
+          <StatusPill value={tenant.updateMode==='hi5_managed'?'hi5 managed':'admin controlled'}/>
+        </button>)}
+      </div>:null}
+    </div>
     <div className="h5a-release-environments">
       {environmentOrder.map(name=>{
         const item=envMap[name]||{environment:name,featureMode:name==='dev'||name==='test'?'all_enabled':'controlled',disposable:name==='test'}
@@ -731,10 +799,10 @@ function Releases({ data, refresh, query }) {
       <label className="h5a-release-description">Description<textarea value={featureDraft.description} onChange={e=>setFeatureDraft({...featureDraft,description:e.target.value})}/></label>
       <button className="rmm-primary compact" disabled={busy==='feature'}>{busy==='feature'?'Saving…':'Create feature flag'}</button>
     </form>:null}
-    {(releaseData.features||[]).length?<div className="rmm-card h5a-feature-flags">
+    {(viewData.features||[]).length?<div className="rmm-card h5a-feature-flags">
       <div className="rmm-card-heading"><div><span className="rmm-eyebrow">FEATURE GATES</span><h2>Environment feature switches</h2><p>Dev and Test are always enabled. UAT and Live require explicit switches.</p></div></div>
       <div className="h5a-feature-grid-head"><span>Feature</span><span>Test</span><span>UAT</span><span>Live</span></div>
-      {(releaseData.features||[]).map(feature=><div className="h5a-feature-row" key={feature.key}><div><strong>{feature.title}</strong><small>{feature.key} · {feature.component}</small></div><span className="h5a-fixed-on">ON</span>{['uat','live'].map(env=><label className="h5a-switch" key={env}><input type="checkbox" checked={Boolean(feature.flags?.[env])} disabled={busy===`feature-${feature.key}-${env}`} onChange={()=>toggleFeature(feature,env)}/><span/></label>)}</div>)}
+      {(viewData.features||[]).map(feature=><div className="h5a-feature-row" key={feature.key}><div><strong>{feature.title}</strong><small>{feature.key} · {feature.component}</small></div><span className="h5a-fixed-on">ON</span>{['uat','live'].map(env=><label className="h5a-switch" key={env}><input type="checkbox" checked={Boolean(feature.flags?.[env])} disabled={busy===`feature-${feature.key}-${env}`} onChange={()=>toggleFeature(feature,env)}/><span/></label>)}</div>)}
     </div>:null}
     <div className="rmm-card h5a-release-changes">
       <div className="rmm-card-heading"><div><span className="rmm-eyebrow">CHANGE LEDGER</span><h2>{query?`Changes matching “${query}”`:'Changes awaiting promotion'}</h2><p>Record evidence separately for Test and UAT, then choose exactly what reaches Live.</p></div><div className="h5a-release-promotion-actions"><button className="rmm-secondary compact" disabled={!uatSelected.length||Boolean(busy)} onClick={promoteUat}>Send selected to UAT ({uatSelected.length})</button><button className="rmm-primary compact" disabled={!liveSelected.length||Boolean(busy)} onClick={promoteLive}>Push selected to Live ({liveSelected.length})</button></div></div>
