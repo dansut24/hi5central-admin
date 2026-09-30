@@ -636,6 +636,7 @@ function Releases({ data, refresh, query }) {
   const changes=(viewData.changes||[]).filter(item=>!query||[item.changeKey,item.title,item.component,item.state,item.sourceRef].some(v=>String(v||'').toLowerCase().includes(query.toLowerCase())))
   const liveSelected=(viewData.changes||[]).filter(item=>item.state==='selected_for_live')
   const selectedTenant=(releaseData.tenants||[]).find(item=>item.tenantId===selectedTenantId)||null
+  const deploymentPolicy=releaseData.deploymentPolicy||{updateMode:config.deploymentMode==='managed'?'hi5_managed':'admin_controlled',releaseChannel:'stable',liveDelayHours:24,allowEmergencySecurityUpdates:true,maintenanceWindow:{}}
   async function run(key,fn){
     setBusy(key);setMessage('')
     try{await fn();await refresh()}catch(err){setMessage(err.message)}finally{setBusy('')}
@@ -654,6 +655,21 @@ function Releases({ data, refresh, query }) {
       const scoped=await api('/releases/overview?tenantId='+encodeURIComponent(tenantId))
       setScopedData(scoped)
     }catch(err){setMessage(err.message)}finally{setBusy('')}
+  }
+
+  async function setDeploymentUpdateMode(updateMode){
+    await run('deployment-policy',async()=>{
+      await api('/releases/deployment/preferences',{
+        method:'PATCH',
+        body:JSON.stringify({
+          updateMode,
+          releaseChannel:deploymentPolicy.releaseChannel||'stable',
+          liveDelayHours:Number(deploymentPolicy.liveDelayHours??24),
+          allowEmergencySecurityUpdates:deploymentPolicy.allowEmergencySecurityUpdates!==false,
+          maintenanceWindow:deploymentPolicy.maintenanceWindow||{},
+        }),
+      })
+    })
   }
 
   async function setTenantUpdateMode(tenant,updateMode){
@@ -737,6 +753,20 @@ function Releases({ data, refresh, query }) {
   const envMap=Object.fromEntries((viewData.environments||[]).map(item=>[item.environment,item]))
   return <>
     <PageHeading view="releases" action={<div className="h5a-release-heading-actions"><button className="rmm-secondary compact" onClick={()=>setFeatureCreating(v=>!v)}><ShieldCheck size={14}/>Feature flag</button><button className="rmm-primary compact" onClick={()=>setCreating(v=>!v)}><Plus size={14}/>New change</button></div>}/>
+    <div className="rmm-card h5a-release-deployment-policy">
+      <div className="rmm-card-heading">
+        <div><span className="rmm-eyebrow">PLATFORM UPDATE OWNERSHIP</span><h2>Who manages this installation?</h2><p>This controls the platform artifact/schema flow for the whole deployment. Tenant activation remains separate below.</p></div>
+        <StatusPill value={deploymentPolicy.updateMode==='hi5_managed'?'hi5 managed':'admin controlled'}/>
+      </div>
+      <div className="h5a-release-deployment-options">
+        <button className={deploymentPolicy.updateMode==='admin_controlled'?'active':''} disabled={Boolean(busy)} onClick={()=>setDeploymentUpdateMode('admin_controlled')}>
+          <ShieldCheck size={15}/><span><strong>Admin controlled</strong><small>The deployment administrator stages and promotes signed releases.</small></span>
+        </button>
+        <button className={deploymentPolicy.updateMode==='hi5_managed'?'active':''} disabled={Boolean(busy)} onClick={()=>setDeploymentUpdateMode('hi5_managed')}>
+          <RefreshCw size={15}/><span><strong>Hi5Central managed</strong><small>The local Release Operator follows Hi5Central's signed release feed and applies releases under this deployment policy.</small></span>
+        </button>
+      </div>
+    </div>
     <div className="rmm-card h5a-release-tenant-scope">
       <div className="rmm-card-heading">
         <div><span className="rmm-eyebrow">TENANT UPDATE OWNERSHIP</span><h2>Release policy scope</h2><p>Choose deployment defaults or inspect a specific tenant's UAT/Production feature state and update-management preference.</p></div>

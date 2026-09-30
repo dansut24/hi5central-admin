@@ -1374,3 +1374,13 @@ body[data-hi5-surface='admin'] #root {
 .h5a-release-tenant-list small { color:var(--rmm-muted); font-size:7px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 @media (max-width:1000px) { .h5a-release-tenant-list { grid-template-columns:1fr 1fr; } }
 @media (max-width:760px) { .h5a-release-tenant-picker { width:100%; min-width:0; } .h5a-release-tenant-policy { flex-direction:column; align-items:stretch; } .h5a-release-mode-buttons button { flex:1 1 auto; } .h5a-release-tenant-list { grid-template-columns:1fr; } }
+
+.h5a-release-deployment-policy { margin-bottom:14px; }
+.h5a-release-deployment-options { display:grid; grid-template-columns:1fr 1fr; gap:9px; padding:0 16px 16px; }
+.h5a-release-deployment-options > button { min-width:0; display:flex; gap:9px; align-items:flex-start; padding:11px; border:1px solid var(--rmm-border); border-radius:9px; background:var(--rmm-soft); color:var(--rmm-text); text-align:left; cursor:pointer; }
+.h5a-release-deployment-options > button > svg { flex:0 0 auto; color:var(--rmm-accent); margin-top:1px; }
+.h5a-release-deployment-options > button > span { min-width:0; display:grid; gap:3px; }
+.h5a-release-deployment-options strong { font-size:9px; }
+.h5a-release-deployment-options small { color:var(--rmm-muted); font-size:8px; line-height:1.4; }
+.h5a-release-deployment-options > button.active { border-color:var(--rmm-accent); background:var(--rmm-accent-soft); color:var(--rmm-accent); }
+@media (max-width:760px) { .h5a-release-deployment-options { grid-template-columns:1fr; padding-left:12px; padding-right:12px; } }
