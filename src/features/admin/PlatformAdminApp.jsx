@@ -158,7 +158,7 @@ function TenantEditor({ tenant, onSaved }) {
   const [draft,setDraft]=useState(()=>({
     companyName:tenant.company_name,
     status:tenant.status,
-    modules:{itsm:Boolean(tenant.modules?.itsm),rmm:Boolean(tenant.modules?.rmm)},
+    modules:{itsm:Boolean(tenant.modules?.itsm),selfService:Boolean(tenant.modules?.itsm),rmm:Boolean(tenant.modules?.rmm)},
   }))
   const [ownerEmail,setOwnerEmail]=useState('')
   const [busy,setBusy]=useState('')
@@ -195,13 +195,13 @@ function TenantEditor({ tenant, onSaved }) {
     </div>
     <div className="h5a-tenant-links">
       {tenant.tenant_url?<a href={tenant.tenant_url} target="_blank" rel="noreferrer">Workspace</a>:null}
-      {tenant.portal_url?<a href={tenant.portal_url} target="_blank" rel="noreferrer">Portal</a>:null}
+      {tenant.modules?.itsm && tenant.portal_url?<a href={tenant.portal_url} target="_blank" rel="noreferrer">Self Service Portal</a>:null}
       {tenant.rmm_url?<a href={tenant.rmm_url} target="_blank" rel="noreferrer">RMM</a>:null}
     </div>
     <div className="h5a-tenant-edit-grid">
       <label>Company name<input value={draft.companyName} onChange={e=>setDraft({...draft,companyName:e.target.value})}/></label>
       <label>Status<select value={draft.status} onChange={e=>setDraft({...draft,status:e.target.value})}><option value="active">Active</option><option value="pending_verification">Pending</option><option value="suspended">Suspended</option><option value="closed">Closed</option></select></label>
-      <label className="h5a-check"><input type="checkbox" checked={draft.modules.itsm} onChange={e=>setDraft({...draft,modules:{...draft.modules,itsm:e.target.checked}})}/> ITSM</label>
+      <label className="h5a-check"><input type="checkbox" checked={draft.modules.itsm} onChange={e=>setDraft({...draft,modules:{...draft.modules,itsm:e.target.checked,selfService:e.target.checked}})}/> ITSM + Self Service</label>
       <label className="h5a-check"><input type="checkbox" checked={draft.modules.rmm} onChange={e=>setDraft({...draft,modules:{...draft.modules,rmm:e.target.checked}})}/> RMM</label>
       <button className="rmm-primary compact" onClick={save} disabled={Boolean(busy)}>{busy==='save'?'Saving…':'Save tenant'}</button>
     </div>
@@ -215,7 +215,7 @@ function TenantEditor({ tenant, onSaved }) {
 }
 function Tenants({ items, refresh, query }) {
   const [creating,setCreating]=useState(false)
-  const [draft,setDraft]=useState({companyName:'',slug:'',modules:{itsm:true,rmm:false},planKey:'custom',billingStatus:'trial',billingCycle:'monthly'})
+  const [draft,setDraft]=useState({companyName:'',slug:'',modules:{itsm:true,selfService:true,rmm:false},planKey:'custom',billingStatus:'trial',billingCycle:'monthly'})
   const needle=query.toLowerCase()
   const filtered=useMemo(()=>items.filter(t=>!query||[
     t.company_name,t.slug,t.owner_name,t.owner_email,t.plan_key,t.billing_status,
@@ -224,12 +224,12 @@ function Tenants({ items, refresh, query }) {
     event.preventDefault()
     await api('/tenants',{method:'POST',body:JSON.stringify(draft)})
     setCreating(false)
-    setDraft({companyName:'',slug:'',modules:{itsm:true,rmm:false},planKey:'custom',billingStatus:'trial',billingCycle:'monthly'})
+    setDraft({companyName:'',slug:'',modules:{itsm:true,selfService:true,rmm:false},planKey:'custom',billingStatus:'trial',billingCycle:'monthly'})
     await refresh()
   }
   return <>
     <PageHeading view="tenants" action={<button className="rmm-primary compact" onClick={()=>setCreating(!creating)}><Plus size={14}/>New tenant</button>}/>
-    {creating?<form className="rmm-card h5a-create" onSubmit={create}><input placeholder="Company name" value={draft.companyName} onChange={e=>setDraft({...draft,companyName:e.target.value})} required/><input placeholder="tenant-slug" value={draft.slug} onChange={e=>setDraft({...draft,slug:e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,'')})} required/><label className="h5a-check"><input type="checkbox" checked={draft.modules.itsm} onChange={e=>setDraft({...draft,modules:{...draft.modules,itsm:e.target.checked}})}/> ITSM</label><label className="h5a-check"><input type="checkbox" checked={draft.modules.rmm} onChange={e=>setDraft({...draft,modules:{...draft.modules,rmm:e.target.checked}})}/> RMM</label><button className="rmm-primary compact">Create tenant</button></form>:null}
+    {creating?<form className="rmm-card h5a-create" onSubmit={create}><input placeholder="Company name" value={draft.companyName} onChange={e=>setDraft({...draft,companyName:e.target.value})} required/><input placeholder="tenant-slug" value={draft.slug} onChange={e=>setDraft({...draft,slug:e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,'')})} required/><label className="h5a-check"><input type="checkbox" checked={draft.modules.itsm} onChange={e=>setDraft({...draft,modules:{...draft.modules,itsm:e.target.checked,selfService:e.target.checked}})}/> ITSM + Self Service</label><label className="h5a-check"><input type="checkbox" checked={draft.modules.rmm} onChange={e=>setDraft({...draft,modules:{...draft.modules,rmm:e.target.checked}})}/> RMM</label><button className="rmm-primary compact">Create tenant</button></form>:null}
     <div className="h5a-stack">{filtered.map(tenant=><article className="rmm-card" key={tenant.id}><div className="rmm-card-heading h5a-tenant-head"><div><span className="rmm-eyebrow">{tenant.slug}</span><h2>{tenant.company_name}</h2><p>{tenant.owner_email||'No owner'} · {tenant.user_count} users · {tenant.device_count} devices</p></div><StatusPill value={tenant.status}/></div><TenantEditor tenant={tenant} onSaved={refresh}/></article>)}</div>
   </>
 }
