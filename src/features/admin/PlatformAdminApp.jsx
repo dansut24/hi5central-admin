@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Activity, AlertTriangle, ArrowUp, Ban, Building2, CreditCard, Database, Download,
-  LogOut, Menu, Moon, PackageCheck, PackageSearch, Pause, Play, Plus, RefreshCw,
+  Activity, AlertTriangle, ArrowUp, Ban, Building2, Check, Copy, CreditCard, Database, Download,
+  KeyRound, Link2Off, LogOut, Menu, Moon, PackageCheck, PackageSearch, Pause, Play, Plus, RefreshCw,
   RotateCcw, Save, Search, ServerCog, ShieldCheck, Sun, Trash2, UserRound, Wrench, X,
 } from 'lucide-react'
 import { deploymentConfig } from '../../lib/deploymentConfig.js'
@@ -13,8 +13,10 @@ const API = config.apiUrl || `https://api.${config.rootDomain}`
 
 const navigation = [
   { id:'overview', label:'Overview', section:'Platform', icon:Database },
+  { id:'releases', label:'Releases & environments', section:'Platform', icon:RefreshCw },
   { id:'tenants', label:'Tenants', section:'Customers', icon:Building2 },
-  { id:'billing', label:'Billing', section:'Customers', icon:CreditCard },
+  { id:'billing', label:'Billing', section:'Commercial', icon:CreditCard },
+  { id:'licenses', label:'MSP licensing', section:'Commercial', icon:KeyRound },
   { id:'qualification', label:'Qualification', section:'Software', icon:PackageCheck },
   { id:'catalogue', label:'Software catalogue', section:'Software', icon:ShieldCheck },
   { id:'winget', label:'WinGet', section:'Software', icon:PackageSearch },
@@ -22,8 +24,10 @@ const navigation = [
 ]
 const pageMeta = {
   overview:['CONTROL PLANE','Platform overview','Hi5Central-wide operations, customers and software safety.'],
+  releases:['RELEASE CONTROL','Releases & environments','Move individual changes through Test, UAT approval and explicit Live promotion.'],
   tenants:['CUSTOMERS','Tenants','Manage tenant ownership, products, lifecycle and key workspace details.'],
   billing:['COMMERCIAL','Billing','Manage tenant plans, billing status, pricing, trials and renewals.'],
+  licenses:['LICENSING AUTHORITY','MSP licensing','Issue, control and audit signed Self-Hosted MSP entitlements.'],
   qualification:['SOFTWARE SAFETY','Qualification','Qualification runners, active work and review outcomes.'],
   catalogue:['GLOBAL SOFTWARE INTELLIGENCE','Software catalogue','The approved global software catalogue consumed by customer RMM tenants.'],
   winget:['WINDOWS PACKAGE INTELLIGENCE','WinGet manifest index','Browse the full Microsoft WinGet source index and control its sync state.'],
@@ -126,7 +130,7 @@ function AdminSidebar({ activeView, mobileOpen, navigate, onClose }) {
 function AdminTopbar({ activeView, user, onLogout, onMenu, query, setQuery, theme, setTheme, refresh }) {
   const [,title]=pageMeta[activeView]
   return <header className="rmm-topbar">
-    <div className="rmm-topbar-title"><button className="rmm-menu-button" onClick={onMenu} type="button"><Menu size={19}/></button><div><span>ADMIN</span><strong>{title}</strong></div></div>
+    <div className="rmm-topbar-title"><button className="rmm-menu-button" onClick={onMenu} type="button"><Menu size={19}/></button><div><span>ADMIN {config.runtimeEnvironment !== 'live' ? <b className={`hi5-env-badge hi5-env-${config.runtimeEnvironment}`}>{config.runtimeEnvironment.toUpperCase()}{config.featureMode === 'all_enabled' ? ' · ALL FEATURES' : ''}</b> : null}</span><strong>{title}</strong></div></div>
     <label className="rmm-global-search"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search tenants, software, qualification…"/></label>
     <div className="rmm-topbar-actions"><button onClick={refresh} type="button" title="Refresh"><RefreshCw size={17}/></button><button onClick={()=>setTheme(theme==='light'?'dark':'light')} type="button">{theme==='light'?<Moon size={17}/>:<Sun size={17}/>}</button><button className="rmm-user" onClick={onLogout} type="button"><span>{initials(user?.name)}</span><div><strong>{user?.name||'Hi5Central admin'}</strong><small>{user?.role||'Sign out'}</small></div><LogOut size={14}/></button></div>
   </header>
@@ -154,7 +158,7 @@ function TenantEditor({ tenant, onSaved }) {
   const [draft,setDraft]=useState(()=>({
     companyName:tenant.company_name,
     status:tenant.status,
-    modules:{itsm:Boolean(tenant.modules?.itsm),rmm:Boolean(tenant.modules?.rmm)},
+    modules:{itsm:Boolean(tenant.modules?.itsm),selfService:Boolean(tenant.modules?.itsm),rmm:Boolean(tenant.modules?.rmm)},
   }))
   const [ownerEmail,setOwnerEmail]=useState('')
   const [busy,setBusy]=useState('')
@@ -191,13 +195,13 @@ function TenantEditor({ tenant, onSaved }) {
     </div>
     <div className="h5a-tenant-links">
       {tenant.tenant_url?<a href={tenant.tenant_url} target="_blank" rel="noreferrer">Workspace</a>:null}
-      {tenant.portal_url?<a href={tenant.portal_url} target="_blank" rel="noreferrer">Portal</a>:null}
+      {tenant.modules?.itsm && tenant.portal_url?<a href={tenant.portal_url} target="_blank" rel="noreferrer">Self Service Portal</a>:null}
       {tenant.rmm_url?<a href={tenant.rmm_url} target="_blank" rel="noreferrer">RMM</a>:null}
     </div>
     <div className="h5a-tenant-edit-grid">
       <label>Company name<input value={draft.companyName} onChange={e=>setDraft({...draft,companyName:e.target.value})}/></label>
       <label>Status<select value={draft.status} onChange={e=>setDraft({...draft,status:e.target.value})}><option value="active">Active</option><option value="pending_verification">Pending</option><option value="suspended">Suspended</option><option value="closed">Closed</option></select></label>
-      <label className="h5a-check"><input type="checkbox" checked={draft.modules.itsm} onChange={e=>setDraft({...draft,modules:{...draft.modules,itsm:e.target.checked}})}/> ITSM</label>
+      <label className="h5a-check"><input type="checkbox" checked={draft.modules.itsm} onChange={e=>setDraft({...draft,modules:{...draft.modules,itsm:e.target.checked,selfService:e.target.checked}})}/> ITSM + Self Service</label>
       <label className="h5a-check"><input type="checkbox" checked={draft.modules.rmm} onChange={e=>setDraft({...draft,modules:{...draft.modules,rmm:e.target.checked}})}/> RMM</label>
       <button className="rmm-primary compact" onClick={save} disabled={Boolean(busy)}>{busy==='save'?'Saving…':'Save tenant'}</button>
     </div>
@@ -211,7 +215,7 @@ function TenantEditor({ tenant, onSaved }) {
 }
 function Tenants({ items, refresh, query }) {
   const [creating,setCreating]=useState(false)
-  const [draft,setDraft]=useState({companyName:'',slug:'',modules:{itsm:true,rmm:false},planKey:'custom',billingStatus:'trial',billingCycle:'monthly'})
+  const [draft,setDraft]=useState({companyName:'',slug:'',modules:{itsm:true,selfService:true,rmm:false},planKey:'custom',billingStatus:'trial',billingCycle:'monthly'})
   const needle=query.toLowerCase()
   const filtered=useMemo(()=>items.filter(t=>!query||[
     t.company_name,t.slug,t.owner_name,t.owner_email,t.plan_key,t.billing_status,
@@ -220,12 +224,12 @@ function Tenants({ items, refresh, query }) {
     event.preventDefault()
     await api('/tenants',{method:'POST',body:JSON.stringify(draft)})
     setCreating(false)
-    setDraft({companyName:'',slug:'',modules:{itsm:true,rmm:false},planKey:'custom',billingStatus:'trial',billingCycle:'monthly'})
+    setDraft({companyName:'',slug:'',modules:{itsm:true,selfService:true,rmm:false},planKey:'custom',billingStatus:'trial',billingCycle:'monthly'})
     await refresh()
   }
   return <>
     <PageHeading view="tenants" action={<button className="rmm-primary compact" onClick={()=>setCreating(!creating)}><Plus size={14}/>New tenant</button>}/>
-    {creating?<form className="rmm-card h5a-create" onSubmit={create}><input placeholder="Company name" value={draft.companyName} onChange={e=>setDraft({...draft,companyName:e.target.value})} required/><input placeholder="tenant-slug" value={draft.slug} onChange={e=>setDraft({...draft,slug:e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,'')})} required/><label className="h5a-check"><input type="checkbox" checked={draft.modules.itsm} onChange={e=>setDraft({...draft,modules:{...draft.modules,itsm:e.target.checked}})}/> ITSM</label><label className="h5a-check"><input type="checkbox" checked={draft.modules.rmm} onChange={e=>setDraft({...draft,modules:{...draft.modules,rmm:e.target.checked}})}/> RMM</label><button className="rmm-primary compact">Create tenant</button></form>:null}
+    {creating?<form className="rmm-card h5a-create" onSubmit={create}><input placeholder="Company name" value={draft.companyName} onChange={e=>setDraft({...draft,companyName:e.target.value})} required/><input placeholder="tenant-slug" value={draft.slug} onChange={e=>setDraft({...draft,slug:e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,'')})} required/><label className="h5a-check"><input type="checkbox" checked={draft.modules.itsm} onChange={e=>setDraft({...draft,modules:{...draft.modules,itsm:e.target.checked,selfService:e.target.checked}})}/> ITSM + Self Service</label><label className="h5a-check"><input type="checkbox" checked={draft.modules.rmm} onChange={e=>setDraft({...draft,modules:{...draft.modules,rmm:e.target.checked}})}/> RMM</label><button className="rmm-primary compact">Create tenant</button></form>:null}
     <div className="h5a-stack">{filtered.map(tenant=><article className="rmm-card" key={tenant.id}><div className="rmm-card-heading h5a-tenant-head"><div><span className="rmm-eyebrow">{tenant.slug}</span><h2>{tenant.company_name}</h2><p>{tenant.owner_email||'No owner'} · {tenant.user_count} users · {tenant.device_count} devices</p></div><StatusPill value={tenant.status}/></div><TenantEditor tenant={tenant} onSaved={refresh}/></article>)}</div>
   </>
 }
@@ -615,6 +619,397 @@ function Winget({ query, refreshKey }) {
   </>
 }
 
+
+
+function Releases({ data, refresh, query }) {
+  const releaseData=data||{environments:[],features:[],changes:[],promotions:[],actions:[],tenants:[]}
+  const [scopedData,setScopedData]=useState(null)
+  const [selectedTenantId,setSelectedTenantId]=useState('')
+  const [creating,setCreating]=useState(false)
+  const [featureCreating,setFeatureCreating]=useState(false)
+  const [uatSelected,setUatSelected]=useState([])
+  const [busy,setBusy]=useState('')
+  const [message,setMessage]=useState('')
+  const [draft,setDraft]=useState({title:'',description:'',component:'platform',risk:'medium',sourceRef:'',version:'',featureKey:''})
+  const [featureDraft,setFeatureDraft]=useState({featureKey:'',title:'',component:'platform',description:''})
+  const viewData=scopedData||releaseData
+  const changes=(viewData.changes||[]).filter(item=>!query||[item.changeKey,item.title,item.component,item.state,item.sourceRef].some(v=>String(v||'').toLowerCase().includes(query.toLowerCase())))
+  const liveSelected=(viewData.changes||[]).filter(item=>item.state==='selected_for_live')
+  const selectedTenant=(releaseData.tenants||[]).find(item=>item.tenantId===selectedTenantId)||null
+  const deploymentPolicy=releaseData.deploymentPolicy||{updateMode:config.deploymentMode==='managed'?'hi5_managed':'admin_controlled',releaseChannel:'stable',liveDelayHours:24,allowEmergencySecurityUpdates:true,maintenanceWindow:{}}
+  async function run(key,fn){
+    setBusy(key);setMessage('')
+    try{await fn();await refresh()}catch(err){setMessage(err.message)}finally{setBusy('')}
+  }
+
+  useEffect(()=>{
+    if(!selectedTenantId)setScopedData(null)
+  },[releaseData,selectedTenantId])
+
+  async function changeTenantScope(tenantId){
+    setSelectedTenantId(tenantId)
+    setMessage('')
+    if(!tenantId){setScopedData(null);return}
+    setBusy('tenant-scope')
+    try{
+      const scoped=await api('/releases/overview?tenantId='+encodeURIComponent(tenantId))
+      setScopedData(scoped)
+    }catch(err){setMessage(err.message)}finally{setBusy('')}
+  }
+
+  async function setDeploymentUpdateMode(updateMode){
+    await run('deployment-policy',async()=>{
+      await api('/releases/deployment/preferences',{
+        method:'PATCH',
+        body:JSON.stringify({
+          updateMode,
+          releaseChannel:deploymentPolicy.releaseChannel||'stable',
+          liveDelayHours:Number(deploymentPolicy.liveDelayHours??24),
+          allowEmergencySecurityUpdates:deploymentPolicy.allowEmergencySecurityUpdates!==false,
+          maintenanceWindow:deploymentPolicy.maintenanceWindow||{},
+        }),
+      })
+    })
+  }
+
+  async function setTenantUpdateMode(tenant,updateMode){
+    await run('tenant-policy-'+tenant.tenantId,async()=>{
+      await api(`/releases/tenants/${tenant.tenantId}/preferences`,{
+        method:'PATCH',
+        body:JSON.stringify({
+          updateMode,
+          liveDelayHours:Number(tenant.liveDelayHours??24),
+          allowEmergencySecurityUpdates:tenant.allowEmergencySecurityUpdates!==false,
+          maintenanceWindow:tenant.maintenanceWindow||{},
+        }),
+      })
+      if(selectedTenantId===tenant.tenantId){
+        const scoped=await api('/releases/overview?tenantId='+encodeURIComponent(tenant.tenantId))
+        setScopedData(scoped)
+      }
+    })
+  }
+
+  async function createChange(event){
+    event.preventDefault()
+    await run('create',async()=>{
+      await api('/releases/changes',{method:'POST',body:JSON.stringify(draft)})
+      setDraft({title:'',description:'',component:'platform',risk:'medium',sourceRef:'',version:'',featureKey:''})
+      setCreating(false)
+    })
+  }
+  async function createFeature(event){
+    event.preventDefault()
+    await run('feature',async()=>{
+      await api('/releases/features',{method:'POST',body:JSON.stringify(featureDraft)})
+      setFeatureDraft({featureKey:'',title:'',component:'platform',description:''})
+      setFeatureCreating(false)
+    })
+  }
+  async function recordResult(change,environment,result){
+    const notes=window.prompt(`${environment.toUpperCase()} ${result} notes (optional)`,'')
+    if(notes===null)return
+    await run(`result-${change.id}-${environment}`,()=>api(`/releases/changes/${change.id}/test-results`,{
+      method:'POST',
+      body:JSON.stringify({environment,result,notes}),
+    }))
+  }
+  async function toggleLive(change){
+    const selected=change.state==='selected_for_live'
+    await run(`live-${change.id}`,()=>api(`/releases/changes/${change.id}/${selected?'unselect-live':'select-live'}`,{method:'POST',body:'{}'}))
+  }
+  async function promoteUat(){
+    if(!uatSelected.length)return
+    const releaseRef=window.prompt('Release candidate reference (optional)',`uat-${new Date().toISOString().slice(0,10)}`)
+    if(releaseRef===null)return
+    await run('promote-uat',async()=>{
+      await api('/releases/promotions',{method:'POST',body:JSON.stringify({toEnvironment:'uat',changeIds:uatSelected,releaseRef})})
+      setUatSelected([])
+    })
+  }
+  async function promoteLive(){
+    if(!liveSelected.length)return
+    if(!window.confirm(`Queue ${liveSelected.length} UAT-approved change${liveSelected.length===1?'':'s'} for Live promotion?`))return
+    const releaseRef=window.prompt('Live release reference',`release-${new Date().toISOString().slice(0,10)}`)
+    if(releaseRef===null)return
+    await run('promote-live',()=>api('/releases/promotions',{method:'POST',body:JSON.stringify({toEnvironment:'live',changeIds:liveSelected.map(item=>item.id),releaseRef})}))
+  }
+  async function resetTest(){
+    if(!window.confirm('Reset the disposable Test environment to default? All Test data will be destroyed.'))return
+    await run('reset-test',()=>api('/releases/environments/test/reset',{method:'POST',body:'{}'}))
+  }
+  async function toggleFeature(feature,environment){
+    await run(`feature-${feature.key}-${environment}`,async()=>{
+      await api(`/releases/features/${encodeURIComponent(feature.key)}/${environment}`,{
+        method:'PATCH',body:JSON.stringify({enabled:!feature.flags?.[environment],tenantId:selectedTenantId||undefined}),
+      })
+      if(selectedTenantId){
+        const scoped=await api('/releases/overview?tenantId='+encodeURIComponent(selectedTenantId))
+        setScopedData(scoped)
+      }
+    })
+  }
+  const environmentOrder=['dev','test','uat','live']
+  const envMap=Object.fromEntries((viewData.environments||[]).map(item=>[item.environment,item]))
+  return <>
+    <PageHeading view="releases" action={<div className="h5a-release-heading-actions"><button className="rmm-secondary compact" onClick={()=>setFeatureCreating(v=>!v)}><ShieldCheck size={14}/>Feature flag</button><button className="rmm-primary compact" onClick={()=>setCreating(v=>!v)}><Plus size={14}/>New change</button></div>}/>
+    <div className="rmm-card h5a-release-deployment-policy">
+      <div className="rmm-card-heading">
+        <div><span className="rmm-eyebrow">PLATFORM UPDATE OWNERSHIP</span><h2>Who manages this installation?</h2><p>This controls the platform artifact/schema flow for the whole deployment. Tenant activation remains separate below.</p></div>
+        <StatusPill value={deploymentPolicy.updateMode==='hi5_managed'?'hi5 managed':'admin controlled'}/>
+      </div>
+      <div className="h5a-release-deployment-options">
+        <button className={deploymentPolicy.updateMode==='admin_controlled'?'active':''} disabled={Boolean(busy)} onClick={()=>setDeploymentUpdateMode('admin_controlled')}>
+          <ShieldCheck size={15}/><span><strong>Admin controlled</strong><small>The deployment administrator stages and promotes signed releases.</small></span>
+        </button>
+        <button className={deploymentPolicy.updateMode==='hi5_managed'?'active':''} disabled={Boolean(busy)} onClick={()=>setDeploymentUpdateMode('hi5_managed')}>
+          <RefreshCw size={15}/><span><strong>Hi5Central managed</strong><small>The local Release Operator follows Hi5Central's signed release feed and applies releases under this deployment policy.</small></span>
+        </button>
+      </div>
+    </div>
+    <div className="rmm-card h5a-release-tenant-scope">
+      <div className="rmm-card-heading">
+        <div><span className="rmm-eyebrow">TENANT UPDATE OWNERSHIP</span><h2>Release policy scope</h2><p>Choose deployment defaults or inspect a specific tenant's UAT/Production feature state and update-management preference.</p></div>
+        <label className="h5a-release-tenant-picker">Scope
+          <select value={selectedTenantId} disabled={busy==='tenant-scope'} onChange={e=>changeTenantScope(e.target.value)}>
+            <option value="">Deployment defaults</option>
+            {(releaseData.tenants||[]).map(tenant=><option key={tenant.tenantId} value={tenant.tenantId}>{tenant.companyName} · {tenant.slug}</option>)}
+          </select>
+        </label>
+      </div>
+      {selectedTenant?<div className="h5a-release-tenant-policy">
+        <div><strong>{selectedTenant.companyName}</strong><small>{selectedTenant.slug} · Production delay {selectedTenant.liveDelayHours??24}h</small></div>
+        <div className="h5a-release-mode-buttons">
+          <button className={selectedTenant.updateMode==='admin_controlled'?'active':''} disabled={Boolean(busy)} onClick={()=>setTenantUpdateMode(selectedTenant,'admin_controlled')}>Admin controlled</button>
+          <button className={selectedTenant.updateMode==='hi5_managed'?'active':''} disabled={Boolean(busy)} onClick={()=>setTenantUpdateMode(selectedTenant,'hi5_managed')}>Hi5Central managed</button>
+        </div>
+      </div>:<div className="h5a-release-tenant-policy"><div><strong>Deployment defaults</strong><small>These switches are inherited when a tenant has no UAT/Production override.</small></div></div>}
+      {(releaseData.tenants||[]).length?<div className="h5a-release-tenant-list">
+        {(releaseData.tenants||[]).map(tenant=><button key={tenant.tenantId} className={selectedTenantId===tenant.tenantId?'active':''} onClick={()=>changeTenantScope(tenant.tenantId)}>
+          <span><strong>{tenant.companyName}</strong><small>{tenant.slug}</small></span>
+          <StatusPill value={tenant.updateMode==='hi5_managed'?'hi5 managed':'admin controlled'}/>
+        </button>)}
+      </div>:null}
+    </div>
+    <div className="h5a-release-environments">
+      {environmentOrder.map(name=>{
+        const item=envMap[name]||{environment:name,featureMode:name==='dev'||name==='test'?'all_enabled':'controlled',disposable:name==='test'}
+        return <article className="rmm-card" key={name}>
+          <div className="h5a-release-env-head"><div><span className="rmm-eyebrow">{name.toUpperCase()}</span><h2>{name==='live'?'Live':name==='uat'?'User acceptance testing':name==='test'?'Disposable Test':'Development'}</h2></div><StatusPill value={item.featureMode==='all_enabled'?'enabled':'controlled'}/></div>
+          <p>{name==='test'?'All registered features enabled. Test data only and safe to reset.':name==='uat'?'Controlled features and immutable release candidate. Test evidence is required before Live.':name==='live'?'Only explicitly promoted, approved changes belong here.':'Engineering integration environment following develop.'}</p>
+          <small>Release: {item.activeReleaseRef||'Not recorded'} · deployed {fmtDate(item.lastDeployedAt)}</small>
+          {name==='test'?<button className="rmm-secondary compact danger" disabled={Boolean(busy)} onClick={resetTest}><RotateCcw size={13}/>{busy==='reset-test'?'Reset queued…':'Reset Test to default'}</button>:null}
+        </article>
+      })}
+    </div>
+    <div className="h5a-release-rules rmm-card">
+      <ShieldCheck size={20}/><div><strong>Promotion guard</strong><p>Test must pass before UAT. UAT must pass before a change can be selected for Live. Live promotion accepts only explicitly selected changes.</p></div>
+    </div>
+    {message?<div className="h5a-page-error">{message}</div>:null}
+    {creating?<form className="rmm-card h5a-release-form" onSubmit={createChange}>
+      <div className="rmm-card-heading"><div><span className="rmm-eyebrow">CHANGE LEDGER</span><h2>Register change</h2><p>Track a deployable feature, fix, integration or platform change independently through Test and UAT.</p></div></div>
+      <div className="h5a-release-form-grid">
+        <label>Title<input required value={draft.title} onChange={e=>setDraft({...draft,title:e.target.value})}/></label>
+        <label>Component<select value={draft.component} onChange={e=>setDraft({...draft,component:e.target.value})}>{['platform','control-server','itsm','rmm','admin','agent','viewer','app-portal','docs','deploy','integration','other'].map(x=><option key={x}>{x}</option>)}</select></label>
+        <label>Risk<select value={draft.risk} onChange={e=>setDraft({...draft,risk:e.target.value})}><option>low</option><option>medium</option><option>high</option></select></label>
+        <label>Version<input value={draft.version} onChange={e=>setDraft({...draft,version:e.target.value})} placeholder="Optional"/></label>
+        <label>Source ref<input value={draft.sourceRef} onChange={e=>setDraft({...draft,sourceRef:e.target.value})} placeholder="Commit SHA / image digest"/></label>
+        <label>Feature flag<select value={draft.featureKey} onChange={e=>setDraft({...draft,featureKey:e.target.value})}><option value="">None</option>{(releaseData.features||[]).map(f=><option key={f.key} value={f.key}>{f.title}</option>)}</select></label>
+      </div>
+      <label className="h5a-release-description">Description<textarea value={draft.description} onChange={e=>setDraft({...draft,description:e.target.value})}/></label>
+      <button className="rmm-primary compact" disabled={busy==='create'}>{busy==='create'?'Saving…':'Add to Test queue'}</button>
+    </form>:null}
+    {featureCreating?<form className="rmm-card h5a-release-form" onSubmit={createFeature}>
+      <div className="rmm-card-heading"><div><span className="rmm-eyebrow">FEATURE CONTROL</span><h2>Register feature flag</h2><p>Test always treats registered features as enabled. UAT and Live are controlled independently.</p></div></div>
+      <div className="h5a-release-form-grid">
+        <label>Feature key<input required value={featureDraft.featureKey} onChange={e=>setFeatureDraft({...featureDraft,featureKey:e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g,'')})} placeholder="rmm.example_feature"/></label>
+        <label>Title<input required value={featureDraft.title} onChange={e=>setFeatureDraft({...featureDraft,title:e.target.value})}/></label>
+        <label>Component<input value={featureDraft.component} onChange={e=>setFeatureDraft({...featureDraft,component:e.target.value})}/></label>
+      </div>
+      <label className="h5a-release-description">Description<textarea value={featureDraft.description} onChange={e=>setFeatureDraft({...featureDraft,description:e.target.value})}/></label>
+      <button className="rmm-primary compact" disabled={busy==='feature'}>{busy==='feature'?'Saving…':'Create feature flag'}</button>
+    </form>:null}
+    {(viewData.features||[]).length?<div className="rmm-card h5a-feature-flags">
+      <div className="rmm-card-heading"><div><span className="rmm-eyebrow">FEATURE GATES</span><h2>Environment feature switches</h2><p>Dev and Test are always enabled. UAT and Live require explicit switches.</p></div></div>
+      <div className="h5a-feature-grid-head"><span>Feature</span><span>Test</span><span>UAT</span><span>Live</span></div>
+      {(viewData.features||[]).map(feature=><div className="h5a-feature-row" key={feature.key}><div><strong>{feature.title}</strong><small>{feature.key} · {feature.component}</small></div><span className="h5a-fixed-on">ON</span>{['uat','live'].map(env=><label className="h5a-switch" key={env}><input type="checkbox" checked={Boolean(feature.flags?.[env])} disabled={busy===`feature-${feature.key}-${env}`} onChange={()=>toggleFeature(feature,env)}/><span/></label>)}</div>)}
+    </div>:null}
+    <div className="rmm-card h5a-release-changes">
+      <div className="rmm-card-heading"><div><span className="rmm-eyebrow">CHANGE LEDGER</span><h2>{query?`Changes matching “${query}”`:'Changes awaiting promotion'}</h2><p>Record evidence separately for Test and UAT, then choose exactly what reaches Live.</p></div><div className="h5a-release-promotion-actions"><button className="rmm-secondary compact" disabled={!uatSelected.length||Boolean(busy)} onClick={promoteUat}>Send selected to UAT ({uatSelected.length})</button><button className="rmm-primary compact" disabled={!liveSelected.length||Boolean(busy)} onClick={promoteLive}>Push selected to Live ({liveSelected.length})</button></div></div>
+      <div className="h5a-release-list">
+        {changes.map(change=>{
+          const testPassed=change.testResult?.result==='passed'
+          const uatPassed=change.uatResult?.result==='passed'
+          const canUat=testPassed&&!['promoted','withdrawn'].includes(change.state)
+          const selectedUat=uatSelected.includes(change.id)
+          return <article key={change.id} className="h5a-release-change">
+            <div className="h5a-release-change-main"><div><span className="rmm-eyebrow">{change.changeKey} · {change.component}</span><h3>{change.title}</h3><p>{change.description||'No description.'}</p><small>{change.sourceRef||'No source ref'}{change.version?` · ${change.version}`:''} · {change.risk} risk</small></div><StatusPill value={change.state}/></div>
+            <div className="h5a-release-stage">
+              <div><strong>Test</strong><StatusPill value={change.testResult?.result||'pending'}/><small>{change.testResult?.notes||'Everything enabled by default.'}</small><span><button onClick={()=>recordResult(change,'test','passed')} disabled={Boolean(busy)}>Pass</button><button onClick={()=>recordResult(change,'test','failed')} disabled={Boolean(busy)}>Fail</button><button onClick={()=>recordResult(change,'test','blocked')} disabled={Boolean(busy)}>Blocked</button></span></div>
+              <div><strong>UAT</strong><StatusPill value={change.uatResult?.result||'pending'}/><small>{change.uatResult?.notes||'Controlled feature testing.'}</small><span><button onClick={()=>recordResult(change,'uat','passed')} disabled={!testPassed||Boolean(busy)}>Pass</button><button onClick={()=>recordResult(change,'uat','failed')} disabled={!testPassed||Boolean(busy)}>Fail</button><button onClick={()=>recordResult(change,'uat','blocked')} disabled={!testPassed||Boolean(busy)}>Blocked</button></span></div>
+              <div className="h5a-release-select"><label><input type="checkbox" checked={selectedUat} disabled={!canUat} onChange={()=>setUatSelected(values=>values.includes(change.id)?values.filter(id=>id!==change.id):[...values,change.id])}/>Include in next UAT deploy</label><label title={!change.featureKey?'Register and wire a feature flag before selective Live promotion.':''}><input type="checkbox" checked={change.state==='selected_for_live'} disabled={!uatPassed||!change.featureKey||Boolean(busy)} onChange={()=>toggleLive(change)}/>Selected for Live{!change.featureKey?' · feature flag required':''}</label></div>
+            </div>
+          </article>
+        })}
+        {!changes.length?<div className="h5a-empty">No release changes match this view.</div>:null}
+      </div>
+    </div>
+    <div className="rmm-card h5a-release-queue">
+      <div className="rmm-card-heading"><div><span className="rmm-eyebrow">DEPLOYMENT OPERATOR</span><h2>Queued environment actions</h2><p>The application requests actions; the isolated deployment operator performs them and reports the result.</p></div></div>
+      <DataTable rows={(releaseData.actions||[]).map(x=>({requested_at:fmtDate(x.requestedAt),environment:x.environment,action:x.action,status:x.status,error:x.errorMessage||''}))} columns={['requested_at','environment','action','status','error']}/>
+    </div>
+  </>
+}
+function licenseLimit(value) {
+  return value == null ? 'Unlimited' : Number(value).toLocaleString()
+}
+function LicenseEditor({ item, onSaved }) {
+  const [draft,setDraft]=useState({
+    customerName:item.customerName||'',
+    status:item.status||'active',
+    tenantLimit:item.limits?.tenants??'',
+    userLimit:item.limits?.users??'',
+    deviceLimit:item.limits?.devices??'',
+    expiresAt:dateInput(item.expiresAt),
+    graceDays:String(item.graceDays??30),
+    notes:item.notes||'',
+    features:{
+      multiTenant:Boolean(item.features?.multiTenant),
+      whiteLabel:Boolean(item.features?.whiteLabel),
+      platformAdmin:Boolean(item.features?.platformAdmin),
+      customerPortals:Boolean(item.features?.customerPortals),
+      customDomains:Boolean(item.features?.customDomains),
+    },
+  })
+  const [busy,setBusy]=useState('')
+  const [message,setMessage]=useState('')
+  async function save(){
+    setBusy('save');setMessage('')
+    try{
+      await api(`/licenses/${item.id}`,{
+        method:'PATCH',
+        body:JSON.stringify({
+          customerName:draft.customerName,
+          status:draft.status,
+          tenantLimit:draft.tenantLimit===''?null:Number(draft.tenantLimit),
+          userLimit:draft.userLimit===''?null:Number(draft.userLimit),
+          deviceLimit:draft.deviceLimit===''?null:Number(draft.deviceLimit),
+          expiresAt:dateToIso(draft.expiresAt),
+          graceDays:Number(draft.graceDays||0),
+          notes:draft.notes,
+          features:draft.features,
+        }),
+      })
+      setMessage('Licence updated.')
+      onSaved()
+    }catch(err){setMessage(err.message)}finally{setBusy('')}
+  }
+  async function resetBinding(){
+    if(!window.confirm('Reset this licence binding? The current installation will need to activate again.'))return
+    setBusy('binding');setMessage('')
+    try{
+      await api(`/licenses/${item.id}/reset-binding`,{method:'POST',body:'{}'})
+      setMessage('Installation binding reset.')
+      onSaved()
+    }catch(err){setMessage(err.message)}finally{setBusy('')}
+  }
+  const featureLabels={
+    multiTenant:'Multi-tenancy',
+    whiteLabel:'White label',
+    platformAdmin:'MSP Admin',
+    customerPortals:'Customer portals',
+    customDomains:'Custom domains',
+  }
+  return <div className="h5a-license-editor">
+    <div className="h5a-license-facts">
+      <span><KeyRound size={15}/><div><small>Key reference</small><strong>•••• {item.keySuffix||'—'}</strong><em>Plaintext key is never stored</em></div></span>
+      <span><ServerCog size={15}/><div><small>Installation</small><strong>{item.boundInstallationId?'Bound':'Not activated'}</strong><em>{item.boundInstallationId||'Waiting for first activation'}</em></div></span>
+      <span><Activity size={15}/><div><small>Last refresh</small><strong>{fmtDate(item.lastRefreshedAt)}</strong><em>Activated {fmtDate(item.lastActivatedAt)}</em></div></span>
+      <span><ShieldCheck size={15}/><div><small>Entitlement</small><strong>{licenseLimit(item.limits?.tenants)} tenants</strong><em>{licenseLimit(item.limits?.devices)} devices · {licenseLimit(item.limits?.users)} users</em></div></span>
+    </div>
+    <div className="h5a-license-grid">
+      <label>Customer<input value={draft.customerName} onChange={e=>setDraft({...draft,customerName:e.target.value})}/></label>
+      <label>Status<select value={draft.status} onChange={e=>setDraft({...draft,status:e.target.value})}><option value="active">Active</option><option value="suspended">Suspended</option><option value="cancelled">Cancelled</option></select></label>
+      <label>Tenant limit<input type="number" min="1" placeholder="Unlimited" value={draft.tenantLimit} onChange={e=>setDraft({...draft,tenantLimit:e.target.value})}/></label>
+      <label>User limit<input type="number" min="1" placeholder="Unlimited" value={draft.userLimit} onChange={e=>setDraft({...draft,userLimit:e.target.value})}/></label>
+      <label>Device limit<input type="number" min="1" placeholder="Unlimited" value={draft.deviceLimit} onChange={e=>setDraft({...draft,deviceLimit:e.target.value})}/></label>
+      <label>Expiry<input type="date" value={draft.expiresAt} onChange={e=>setDraft({...draft,expiresAt:e.target.value})}/></label>
+      <label>Grace days<input type="number" min="0" max="90" value={draft.graceDays} onChange={e=>setDraft({...draft,graceDays:e.target.value})}/></label>
+    </div>
+    <div className="h5a-license-features">
+      {Object.entries(featureLabels).map(([key,label])=><label key={key}><input type="checkbox" checked={Boolean(draft.features[key])} onChange={e=>setDraft({...draft,features:{...draft.features,[key]:e.target.checked}})}/>{label}</label>)}
+    </div>
+    <label className="h5a-license-notes">Internal notes<textarea value={draft.notes} onChange={e=>setDraft({...draft,notes:e.target.value})} placeholder="Commercial or operational notes. Never paste the raw licence key here."/></label>
+    <div className="h5a-license-actions">
+      <button className="rmm-primary compact" onClick={save} disabled={Boolean(busy)}><Save size={13}/>{busy==='save'?'Saving…':'Save licence'}</button>
+      {item.boundInstallationId?<button className="rmm-secondary compact danger" onClick={resetBinding} disabled={Boolean(busy)}><Link2Off size={13}/>{busy==='binding'?'Resetting…':'Reset binding'}</button>:null}
+      {message?<span>{message}</span>:null}
+    </div>
+  </div>
+}
+
+function Licenses({ items, refresh, query }) {
+  const emptyDraft={customerName:'',tenantLimit:'',userLimit:'',deviceLimit:'',expiresAt:'',graceDays:'30',notes:''}
+  const [creating,setCreating]=useState(false)
+  const [draft,setDraft]=useState(emptyDraft)
+  const [busy,setBusy]=useState(false)
+  const [issued,setIssued]=useState(null)
+  const [copied,setCopied]=useState(false)
+  const [error,setError]=useState('')
+  const filtered=items.filter(item=>!query||[item.customerName,item.status,item.keySuffix,item.boundInstallationId].some(value=>String(value||'').toLowerCase().includes(query.toLowerCase())))
+  const active=items.filter(item=>item.status==='active').length
+  const bound=items.filter(item=>item.boundInstallationId).length
+  async function issue(event){
+    event.preventDefault();setBusy(true);setError('')
+    try{
+      const result=await api('/licenses',{
+        method:'POST',
+        body:JSON.stringify({
+          customerName:draft.customerName,
+          tenantLimit:draft.tenantLimit===''?null:Number(draft.tenantLimit),
+          userLimit:draft.userLimit===''?null:Number(draft.userLimit),
+          deviceLimit:draft.deviceLimit===''?null:Number(draft.deviceLimit),
+          expiresAt:dateToIso(draft.expiresAt),
+          graceDays:Number(draft.graceDays||30),
+          notes:draft.notes,
+        }),
+      })
+      setIssued({key:result.licenseKey,notice:result.notice,customer:result.license?.customerName})
+      setDraft(emptyDraft);setCreating(false);setCopied(false);refresh()
+    }catch(err){setError(err.message)}finally{setBusy(false)}
+  }
+  async function copyKey(){
+    if(!issued?.key)return
+    await navigator.clipboard?.writeText(issued.key)
+    setCopied(true)
+  }
+  return <>
+    <PageHeading view="licenses" action={<button className="rmm-primary compact" onClick={()=>setCreating(value=>!value)}><Plus size={14}/>{creating?'Cancel':'Issue MSP licence'}</button>}/>
+    <div className="h5a-license-summary">
+      <article className="rmm-card"><KeyRound size={18}/><div><span>Active licences</span><strong>{active}</strong><small>{items.length} total MSP licences</small></div></article>
+      <article className="rmm-card"><ServerCog size={18}/><div><span>Bound installations</span><strong>{bound}</strong><small>{items.length-bound} awaiting activation or reset</small></div></article>
+      <article className="rmm-card"><ShieldCheck size={18}/><div><span>Authority model</span><strong>Ed25519</strong><small>Signed entitlements verified locally by self-hosted MSP</small></div></article>
+    </div>
+    {issued?<div className="h5a-issued-key"><div><span className="rmm-eyebrow">ONE-TIME LICENCE KEY</span><h2>{issued.customer||'MSP licence'} issued</h2><p>{issued.notice||'Store and send this key securely. It cannot be shown again from Hi5Central.'}</p><code>{issued.key}</code></div><button className="rmm-primary compact" onClick={copyKey}>{copied?<Check size={14}/>:<Copy size={14}/>} {copied?'Copied':'Copy key'}</button></div>:null}
+    {creating?<form className="rmm-card h5a-license-create" onSubmit={issue}>
+      <div className="rmm-card-heading"><div><span className="rmm-eyebrow">NEW SELF-HOSTED MSP</span><h2>Issue signed entitlement</h2><p>The raw key is returned once. The database stores only its hash and display suffix.</p></div></div>
+      <div className="h5a-license-grid">
+        <label>Customer<input required value={draft.customerName} onChange={e=>setDraft({...draft,customerName:e.target.value})} placeholder="MSP customer name"/></label>
+        <label>Tenant limit<input type="number" min="1" value={draft.tenantLimit} onChange={e=>setDraft({...draft,tenantLimit:e.target.value})} placeholder="Unlimited"/></label>
+        <label>User limit<input type="number" min="1" value={draft.userLimit} onChange={e=>setDraft({...draft,userLimit:e.target.value})} placeholder="Unlimited"/></label>
+        <label>Device limit<input type="number" min="1" value={draft.deviceLimit} onChange={e=>setDraft({...draft,deviceLimit:e.target.value})} placeholder="Unlimited"/></label>
+        <label>Expiry<input type="date" value={draft.expiresAt} onChange={e=>setDraft({...draft,expiresAt:e.target.value})}/></label>
+        <label>Grace days<input type="number" min="0" max="90" value={draft.graceDays} onChange={e=>setDraft({...draft,graceDays:e.target.value})}/></label>
+      </div>
+      <label className="h5a-license-notes">Internal notes<textarea value={draft.notes} onChange={e=>setDraft({...draft,notes:e.target.value})}/></label>
+      {error?<div className="h5a-page-error">{error}</div>:null}
+      <button className="rmm-primary compact" disabled={busy}><KeyRound size={13}/>{busy?'Issuing…':'Issue licence'}</button>
+    </form>:null}
+    <div className="h5a-stack h5a-license-stack">{filtered.map(item=><article className="rmm-card" key={item.id}><div className="rmm-card-heading h5a-license-head"><div><span className="rmm-eyebrow">MSP · •••• {item.keySuffix||'—'}</span><h2>{item.customerName}</h2><p>Expires {fmtDate(item.expiresAt)} · {item.graceDays} day grace · created {fmtDate(item.createdAt)}</p></div><StatusPill value={item.status}/></div><LicenseEditor item={item} onSaved={refresh}/></article>)}</div>
+    {!filtered.length?<div className="rmm-card h5a-empty">{query?'No MSP licences match this search.':'No MSP licences have been issued yet.'}</div>:null}
+  </>
+}
+
 function Audit({ items, query }) {
   const rows=items.map(x=>({...x,created_at:fmtDate(x.created_at)})).filter(x=>!query||String(x.actor_name||'').toLowerCase().includes(query.toLowerCase())||String(x.action||'').toLowerCase().includes(query.toLowerCase()))
   return <><PageHeading view="audit"/><div className="rmm-card h5a-table-card"><div className="rmm-card-heading"><div><span className="rmm-eyebrow">PLATFORM EVENTS</span><h2>Administrative audit trail</h2></div></div><DataTable rows={rows} columns={['created_at','actor_name','action','target_type','target_id']}/></div></>
@@ -627,7 +1022,7 @@ export function PlatformAdminApp() {
   const [query,setQuery]=useState('')
   const [mobileOpen,setMobileOpen]=useState(false)
   const [theme,setThemeState]=useState(()=>localStorage.getItem('hi5central-admin-theme')||'light')
-  const [data,setData]=useState({overview:null,tenants:[],billing:[],qualification:{runners:[],active:[],pending:[],recent:[]},catalogue:[],audit:[]})
+  const [data,setData]=useState({overview:null,releases:{environments:[],features:[],changes:[],promotions:[],actions:[]},tenants:[],billing:[],licenses:[],qualification:{runners:[],active:[],pending:[],recent:[]},catalogue:[],audit:[]})
   const [wingetRefreshKey,setWingetRefreshKey]=useState(0)
   const [error,setError]=useState('')
   function setTheme(value){setThemeState(value);localStorage.setItem('hi5central-admin-theme',value)}
@@ -636,10 +1031,10 @@ export function PlatformAdminApp() {
     if(!user||target==='winget')return
     setError('')
     try{
-      const path={overview:'/overview',tenants:'/tenants',billing:'/tenants',qualification:'/qualification',catalogue:'/software/catalogue',audit:'/audit'}[target]
+      const path={overview:'/overview',releases:'/releases/overview',tenants:'/tenants',billing:'/tenants',licenses:'/licenses',qualification:'/qualification',catalogue:'/software/catalogue',audit:'/audit'}[target]
       if(!path)return
       const result=await api(path)
-      const value=['tenants','billing','catalogue','audit'].includes(target)?result.items:result
+      const value=['tenants','billing','licenses','catalogue','audit'].includes(target)?result.items:result
       setData(prev=>({...prev,[target]:value}))
     }catch(err){if(err.status===401)setUser(null);else setError(err.message)}
   }
@@ -652,8 +1047,10 @@ export function PlatformAdminApp() {
   function refreshCurrent(){if(view==='winget')setWingetRefreshKey(value=>value+1);else load(view)}
   function renderPage(){
     if(view==='overview')return <Overview data={data.overview} refresh={()=>load('overview')}/>
+    if(view==='releases')return <Releases data={data.releases} refresh={()=>load('releases')} query={query}/>
     if(view==='tenants')return <Tenants items={data.tenants} refresh={()=>load('tenants')} query={query}/>
     if(view==='billing')return <Billing items={data.billing} refresh={()=>load('billing')} query={query}/>
+    if(view==='licenses')return <Licenses items={data.licenses} refresh={()=>load('licenses')} query={query}/>
     if(view==='qualification')return <Qualification data={data.qualification} query={query} refresh={()=>load('qualification')}/>
     if(view==='catalogue')return <Catalogue items={data.catalogue} query={query} refresh={()=>load('catalogue')}/>
     if(view==='winget')return <Winget key={query} query={query} refreshKey={wingetRefreshKey}/>
